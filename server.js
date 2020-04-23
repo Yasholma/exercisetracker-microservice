@@ -71,16 +71,25 @@ app.post("/api/exercise/new-user", (req, res) => {
     return;
 });
 
+// Get all users
+app.get("/api/exercise/users", (req, res) => {
+    User.find((err, data) => {
+        if (err) return res.send({ status: 200, message: "No data" });
+        return res.send(data);
+    });
+    return;
+});
+
 // Add Exercise and assigning
 app.post("/api/exercise/add", (req, res) => {
-    const userId = req.body.userId;
-    const description = req.body.description;
-    const duration = req.body.duration;
-    const date = req.body.date;
+    let userId = req.body.userId;
+    let description = req.body.description;
+    let duration = req.body.duration;
+    let date = req.body.date;
 
-    const datetime = new Date(date).toDateString();
+    date = !date ? (date = new Date()) : (date = new Date(date));
 
-    if (!userId || !description || !duration || !date) {
+    if (!userId || !description || !duration) {
         return res.status(400).send({ message: "all fields are required" });
     }
 
@@ -96,16 +105,16 @@ app.post("/api/exercise/add", (req, res) => {
                 userId: userId,
                 description: description,
                 duration: duration,
-                date: datetime,
+                date: date,
             });
             exercise.save((err, exe) => {
                 if (err) res.send({ status: 500, message: "network issue" });
                 res.status(201).send({
-                    _id: exe._id,
+                    username: user.username,
                     description,
-                    duration,
-                    datetime,
-                    userId,
+                    duration: +duration,
+                    _id: userId,
+                    date: date.toDateString(),
                 });
             });
         } else {
@@ -120,20 +129,39 @@ app.post("/api/exercise/add", (req, res) => {
 // [&from][&to][&limit]
 
 // Get User Exercise Info
-app.get("/api/exercise/log/:userId/:from?/:to?/:limit?", (req, res) => {
-    console.log(req.params);
+app.get("/api/exercise/log", (req, res) => {
+    let { userId, from, to, limit } = req.query;
 
-    let { userId, from, to, limit } = req.params;
+    User.findById(userId, (error, user) => {
+        if (error) res.send({ status: 500, message: "network issue" });
+        if (user) {
+            Exercise.find({ userId: userId }, (err, data) => {
+                if (err) res.send({ status: 500, message: "network issue" });
+                let log = data;
+                const fromDate = new Date(from);
+                const toDate = new Date(to);
+                if (from) {
+                    log = data.filter(d => new Date(d.date) >= fromDate);
+                }
+                if (to) {
+                    log = data.filter(d => new Date(d.date) <= toDate);
+                }
+                if (limit) {
+                    log = data.slice(0, +limit);
+                }
+                res.status(201).send({
+                    _id: user._id,
+                    username: user.username,
+                    count: log.length,
+                    log: log,
+                });
+            });
+        } else {
+            res.status(500).send("unknown _id");
+            return;
+        }
+    });
 
-    from = new Date(from).toDateString();
-    to = new Date(to).toDateString();
-
-    Exercise.find({ userId: userId })
-        .limit(limit)
-        .exec((err, data) => {
-            if (err) return res.send({ status: 404, message: "No Data" });
-            return res.send(data);
-        });
     return;
 });
 
